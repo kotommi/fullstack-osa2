@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import Axios from "axios";
+import contactService from "./services/contacts";
 
 const Filter = ({ filter, handleFilter }) => {
   return (
@@ -35,15 +35,33 @@ const PersonList = ({ getContacts }) => {
   );
 };
 
+const Notification = ({ message }) => {
+  if (message === null) {
+    return null;
+  }
+
+  const error = {
+    color: message.includes("valitettavasti") ? "red" : "green",
+    background: "lightgrey",
+    fontSize: 20,
+    borderStyle: "solid",
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 10
+  };
+
+  return <div style={error}>{message}</div>;
+};
+
 const App = () => {
   const [persons, setPersons] = useState([]);
   const [newName, setNewName] = useState("");
   const [newNumber, setNewNumber] = useState("");
   const [filter, setFilter] = useState("");
+  const [errorMessage, setErrorMessage] = useState("testivirhe");
 
   const personHook = () => {
-    Axios.get("http://localhost:3001/persons").then(response => {
-      const persons = response.data;
+    contactService.getAll().then(persons => {
       setPersons(persons);
     });
   };
@@ -53,9 +71,11 @@ const App = () => {
   const personsToShow =
     filter.length === 0
       ? persons
-      : persons.filter(person =>
-          person.name.toLowerCase().includes(filter.trim().toLowerCase())
-        );
+      : persons.filter(person => {
+          return person.name
+            .toLowerCase()
+            .includes(filter.trim().toLowerCase());
+        });
 
   const addContact = event => {
     event.preventDefault();
@@ -63,44 +83,92 @@ const App = () => {
       name: newName,
       number: newNumber
     };
-    if (persons.map(person => person.name).indexOf(newName) !== -1) {
-      window.alert(newName + " on jo luettelossa");
+    const found = persons.find(person => {
+      return person.name === contactObject.name;
+    });
+    if (found !== undefined) {
+      const changedContact = { ...found, number: newNumber };
+      editContact(changedContact);
       return;
     }
-    setPersons(persons.concat(contactObject));
+    contactService.create(contactObject).then(newPerson => {
+      setPersons(persons.concat(newPerson));
+      setErrorMessage(`Lisättiin ${newPerson.name}`);
+    });
     setNewName("");
     setNewNumber("");
   };
 
+  const editContact = contactObject => {
+    const ans = window.confirm(
+      `${
+        contactObject.name
+      } on jo luettelossa, korvataanko vanha numero uudella?`
+    );
+    if (!ans) {
+      return;
+    }
+    contactService.update(contactObject.id, contactObject).then(() => {
+      setPersons(
+        persons.map(person => {
+          return contactObject.id === person.id ? contactObject : person;
+        })
+      );
+      setErrorMessage(`Muokattiin ${contactObject.name}`);
+    });
+  };
+
+  const removeContact = (id, name) => {
+    const ans = window.confirm(`poistetaanko ${name}`);
+    if (!ans) {
+      return;
+    }
+    contactService
+      .remove(id)
+      .then(() => {
+        setPersons(
+          persons.filter(p => {
+            return p.id !== id;
+          })
+        );
+        setErrorMessage(`Poistettiin ${name}`);
+      })
+      .catch(error => {
+        setPersons(
+          persons.filter(p => {
+            return p.id !== id;
+          })
+        );
+        setErrorMessage(`${name} oli jo valitettavasti poistettu`);
+      });
+  };
+
   const getContacts = () => {
-    return personsToShow.map(person => (
-      <li key={person.name}>
-        {person.name} {person.number}
-      </li>
-    ));
-  };
-
-  const handleName = event => {
-    setNewName(event.target.value);
-  };
-
-  const handleNumber = event => {
-    setNewNumber(event.target.value);
-  };
-
-  const handleFilter = event => {
-    setFilter(event.target.value);
+    return personsToShow.map(person => {
+      return (
+        <li key={person.id}>
+          {person.name} {person.number}
+          <button onClick={() => removeContact(person.id, person.name)}>
+            poista
+          </button>
+        </li>
+      );
+    });
   };
 
   return (
     <div>
       <h2>Puhelinluettelo</h2>
-      <Filter filter={filter} handleFilter={handleFilter} />
+      <Notification message={errorMessage} />
+      <Filter
+        filter={filter}
+        handleFilter={event => setFilter(event.target.value)}
+      />
       <PersonForm
         newName={newName}
         newNumber={newNumber}
-        handleName={handleName}
-        handleNumber={handleNumber}
+        handleName={event => setNewName(event.target.value)}
+        handleNumber={event => setNewNumber(event.target.value)}
         addContact={addContact}
       />
       <PersonList getContacts={getContacts} />
