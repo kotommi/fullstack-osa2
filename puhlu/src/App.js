@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Axios from "axios";
 
 const Filter = ({ filter, handleFilter }) => {
   return (
@@ -35,14 +36,19 @@ const PersonList = ({ getContacts }) => {
 };
 
 const App = () => {
-  const [persons, setPersons] = useState([
-    { name: "Arton Hella", number: "050-1234" },
-    { name: "M Luuk", number: "1234" },
-    { name: "T Koiv", number: "15556" }
-  ]);
+  const [persons, setPersons] = useState([]);
   const [newName, setNewName] = useState("");
   const [newNumber, setNewNumber] = useState("");
   const [filter, setFilter] = useState("");
+
+  const personHook = () => {
+    Axios.get("http://localhost:3001/persons").then(response => {
+      const persons = response.data;
+      setPersons(persons);
+    });
+  };
+  // fetch persons from json
+  useEffect(personHook, []);
 
   const personsToShow =
     filter.length === 0
